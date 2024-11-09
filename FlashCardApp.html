@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Upload with Text Extraction and Flash Card</title>
+    <style>
+        /* Styling for a Dropbox-like appearance */
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f3f4f6;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+
+        .upload-container {
+            width: 100%;
+            max-width: 500px;
+            padding: 40px;
+            border: 2px dashed #0061d5;
+            background-color: #ffffff;
+            text-align: center;
+            border-radius: 8px;
+            transition: background-color 0.3s ease;
+            cursor: pointer;
+        }
+
+        .upload-container.dragover {
+            background-color: #e6f0ff;
+        }
+
+        .upload-container:hover {
+            background-color: #f8fbff;
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        .preview-container {
+            margin-top: 20px;
+            display: none;
+        }
+
+        .preview {
+            max-width: 100%;
+            border-radius: 8px;
+        }
+
+        button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            background-color: #0061d5;
+            color: #ffffff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #004bb5;
+        }
+
+        #textOutput {
+            margin-top: 20px;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="upload-container" id="dropZone">
+        <h2>Drag & Drop Files Here</h2>
+        <p>or click to upload an image or PDF</p>
+        <input type="file" id="fileInput" name="file" accept="image/*,.pdf" required>
+    </div>
+
+    <div class="preview-container" id="previewContainer">
+        <h3>Preview</h3>
+        <img id="imagePreview" class="preview" src="#" alt="Image Preview" style="display: none;">
+        <iframe id="pdfPreview" class="preview" style="width:100%; height:400px; display: none;"></iframe>
+        
+        <!-- Buttons for actions -->
+        <button id="extractTextButton">Extract Text</button>
+        <button id="generateCardButton">Show Flash Card</button>
+        
+        <!-- Output for extracted text -->
+        <div id="textOutput"></div>
+        <div id="cardOutput"></div>
+    </div>
+
+    <script>
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const imagePreview = document.getElementById('imagePreview');
+        const pdfPreview = document.getElementById('pdfPreview');
+        const previewContainer = document.getElementById('previewContainer');
+        const extractTextButton = document.getElementById('extractTextButton');
+        const generateCardButton = document.getElementById('generateCardButton');
+        const textOutput = document.getElementById('textOutput');
+        const cardOutput = document.getElementById('cardOutput');
+        // Show preview when file is selected
+        fileInput.addEventListener('change', () => handleFiles(fileInput.files));
+
+        // Handle click on drop zone
+        dropZone.addEventListener('click', () => fileInput.click());
+
+        // Handle drag events for the drop zone
+        dropZone.addEventListener('dragover', (event) => {
+            event.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+
+        dropZone.addEventListener('drop', (event) => {
+            event.preventDefault();
+            dropZone.classList.remove('dragover');
+            fileInput.files = event.dataTransfer.files;
+            handleFiles(fileInput.files);
+        });
+
+        function handleFiles(files) {
+            const file = files[0];
+            if (!file) return;
+
+            // Show preview based on file type
+            if (file.type.startsWith('image/')) {
+                imagePreview.src = URL.createObjectURL(file);
+                imagePreview.style.display = 'block';
+                pdfPreview.style.display = 'none';
+            } else if (file.type === 'application/pdf') {
+                pdfPreview.src = URL.createObjectURL(file);
+                pdfPreview.style.display = 'block';
+                imagePreview.style.display = 'none';
+            }
+            previewContainer.style.display = 'block';
+        }
+
+        // Event listener for extracting text
+        extractTextButton.addEventListener('click', async function() {
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                alert("Please upload a file first.");
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch('http://127.0.0.1:5000/extract-text', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    textOutput.textContent = result.text || "No text found";
+                } else {
+                    textOutput.textContent = 'File processing failed. Please try again.';
+                }
+            } catch (error) {
+                console.error('Error uploading file:', error);
+                textOutput.textContent = 'Error extracting text. Please try again later.';
+            }
+        });
+
+        // Event listener for generating a flash card
+        generateCardButton.addEventListener('click', async function() {
+            const extractedText = textOutput.textContent;
+
+            if (!extractedText) {
+                alert("Please extract text first.");
+                return;
+            }
+
+            try {
+                const response = await fetch('http://127.0.0.1:5000/generate-flashcards', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ text: extractedText })
+                });
+
+                if (response.ok) {
+                    const flashcard = await response.json();
+                    textOutput.textContent=""
+                    cardOutput.textContent = flashcard.text || "No flash card content available."
+                   // alert("Flash Card: " + (flashcard.text || "No flash card content available."));
+                } else {
+                    alert('Failed to generate flash card. Please try again.');
+                }
+            } catch (error) {
+                console.error('Error generating flash card:', error);
+                alert('Error generating flash card. Please try again later.');
+            }
+        });
+    </script>
+</body>
+</html>
